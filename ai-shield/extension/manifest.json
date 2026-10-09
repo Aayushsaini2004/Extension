@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "AI Shield - Sensitive Data Guard",
+  "version": "1.0.0",
+  "description": "ChatGPT, Claude, Gemini etc. par sensitive data (keys, secrets, ID images) bhejne se pehle warning deta hai.",
+  "permissions": ["offscreen"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "AI Shield" },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "content_scripts": [{
+    "matches": [
+      "https://chatgpt.com/*", "https://chat.openai.com/*", "https://claude.ai/*",
+      "https://gemini.google.com/*", "https://www.perplexity.ai/*",
+      "https://copilot.microsoft.com/*", "https://chat.deepseek.com/*",
+      "https://grok.com/*", "https://chat.mistral.ai/*",
+      "https://poe.com/*", "https://you.com/*", "https://huggingface.co/chat/*"
+    ],
+    "js": ["patterns.js", "content.js"],
+    "run_at": "document_start"
+  }]
+}
