@@ -5,7 +5,7 @@
   refresh(); setInterval(refresh, 60000);
 
   // ---------- Popup UI (Shadow DOM, page CSS se safe) ----------
-  function showAlert({ title, findings, onProceed, onCancel }) {
+  function showAlert({ title, findings, onProceed, onNeutralize, neutralizeLabel, onCancel }) {
     document.getElementById("ai-shield-host")?.remove();
     const host = document.createElement("div"); host.id = "ai-shield-host";
     const root = host.attachShadow({ mode: "open" });
@@ -17,12 +17,14 @@
     li{padding:8px 10px;border:1px solid #eee;border-radius:8px;margin-bottom:6px;font-size:13px;display:flex;justify-content:space-between;gap:8px}
     code{background:#f3f4f6;padding:1px 5px;border-radius:4px}.HIGH{color:#b91c1c;font-weight:700}.MEDIUM{color:#b45309;font-weight:700}
     .row{display:flex;gap:8px;justify-content:flex-end}button{border:0;border-radius:8px;padding:9px 14px;font-size:13px;cursor:pointer}
-    .ok{background:#111;color:#fff}.no{background:#e5e7eb}`;
+    .ok{background:#111;color:#fff}.neutralize{background:#2563eb;color:#fff}.no{background:#e5e7eb}`;
     const bg = document.createElement("div"); bg.className = "bg";
     const box = document.createElement("div"); box.className = "box";
     const h = document.createElement("h2"); h.textContent = "⚠️ " + title;
     const p = document.createElement("p");
-    p.textContent = title.includes("scan nahi ho paya")
+    p.textContent = onNeutralize
+      ? "Sensitive values ko placeholders se replace karke sanitized prompt bhej sakte hain."
+      : title.includes("scan nahi ho paya")
       ? "Image ko check nahi kar paye. Cancel karke dobara try karein, ya risk samajh kar proceed karein."
       : "AI Shield ne ye sensitive content detect kiya:";
     const ul = document.createElement("ul");
@@ -36,6 +38,13 @@
     const row = document.createElement("div"); row.className = "row";
     const cancel = document.createElement("button"); cancel.className = "no"; cancel.textContent = onProceed ? "Cancel / Edit" : "OK";
     cancel.onclick = () => { host.remove(); onCancel?.(); }; row.appendChild(cancel);
+    if (onNeutralize) {
+      const neutralize = document.createElement("button");
+      neutralize.className = "neutralize";
+      neutralize.textContent = neutralizeLabel || "1-Click Neutralize & Send";
+      neutralize.onclick = () => { host.remove(); onNeutralize(); };
+      row.appendChild(neutralize);
+    }
     if (onProceed) {
       const go = document.createElement("button"); go.className = "ok"; go.textContent = "Phir bhi bhejo";
       go.onclick = () => { host.remove(); onProceed(); }; row.appendChild(go);
@@ -50,6 +59,24 @@
     from?.closest?.("form")?.querySelector("textarea,[contenteditable='true']") ||
     document.querySelector("textarea,[contenteditable='true']");
   const textOf = (el) => (el ? ("value" in el ? el.value : el.innerText) : "");
+  const neutralizeComposer = (composer) => {
+    if (!composer) return false;
+    const result = neutralizeText(textOf(composer));
+    if (!result.changed) return false;
+    if ("value" in composer) {
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(composer), "value")?.set;
+      if (setter) setter.call(composer, result.text);
+      else composer.value = result.text;
+    } else {
+      composer.innerText = result.text;
+    }
+    composer.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      inputType: "insertReplacementText",
+      data: null
+    }));
+    return true;
+  };
   const isSendBtn = (b) => b && /send|submit|ask/i.test(
     (b.getAttribute("aria-label") || "") + (b.getAttribute("data-testid") || "") +
     (b.getAttribute("title") || "") + (b.type === "submit" ? "submit" : ""));
@@ -121,8 +148,20 @@
       const imageFindings = (await Promise.all(files.map(scanImage))).flat();
       const findings = [...textFindings, ...imageFindings];
       if (findings.length) {
+        const neutralize = textFindings.length && !imageFindings.length
+          ? () => {
+            const composer = composerOf(trigger);
+            if (!neutralizeComposer(composer)) {
+              checkingSend = false;
+              return;
+            }
+            for (const file of files) pendingImages.delete(file);
+            resumeSend(e, trigger);
+          }
+          : undefined;
         showAlert({
           title: "Sensitive content mila - message roka gaya", findings,
+          onNeutralize: neutralize,
           onProceed: () => {
             for (const file of files) pendingImages.delete(file);
             resumeSend(e, trigger);
@@ -155,8 +194,17 @@
   // ---------- Paste (text + images) ----------
   document.addEventListener("paste", (e) => {
     if (!active) return;
-    const f = scanText(e.clipboardData?.getData("text") || "");
-    if (f.length) showAlert({ title: "Paste kiye text me sensitive data hai", findings: f });
+    const pastedText = e.clipboardData?.getData("text") || "";
+    const f = scanText(pastedText);
+    if (f.length) {
+      const composer = composerOf(e.target);
+      showAlert({
+        title: "Paste kiye text me sensitive data hai",
+        findings: f,
+        neutralizeLabel: "1-Click Neutralize",
+        onNeutralize: () => neutralizeComposer(composer)
+      });
+    }
     for (const file of e.clipboardData?.files || []) if (file.type.startsWith("image/")) pendingImages.add(file);
   }, true);
 

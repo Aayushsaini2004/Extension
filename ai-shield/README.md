@@ -4,6 +4,16 @@ AI Shield is a free Manifest V3 browser extension that warns about sensitive
 data before it is sent to supported AI chat sites. Text detection and OCR run
 locally in your browser. No account, payment, license key, or server is needed.
 
+When sensitive text is pasted or found as you submit a prompt, choose the
+**1-Click Neutralize** button to replace detected values with contextual
+placeholders in the composer. On the submit warning, **1-Click Neutralize &
+Send** also sends the sanitized prompt. Detected sensitive content in an image
+cannot be rewritten in place, so review or remove that attachment before
+proceeding. Credential assignment names such as `API_KEY`, `OPENAI_API_KEY`,
+`ACCESS_TOKEN`, and `CLIENT_SECRET` are detected across providers without
+requiring a provider-specific token format. Arbitrary unlabeled strings cannot
+always be identified reliably as API keys.
+
 ## Requirements
 
 - Chrome or another Chromium-based browser
